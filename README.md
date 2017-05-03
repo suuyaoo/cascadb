@@ -77,17 +77,17 @@ Read benchmark results after random insertions
 
 3. Insert record.
 
-        if (!db->put("This is the key", "This is the value") {
+        if (!db->put("This is the key", "This is the value")) {
             fprintf(stderr, "put error\n");
         }
 
 4. Read record.
 
         Slice value;
-        if (!db->get("This is the key", value) {
+        if (!db->get("This is the key", value)) {
             fprintf(stderr, "get error\n");
         }
-        fprintf(stdout, "the value is %s", value.to_string().c_str());
+        fprintf(stdout, "the value is %s\n", value.to_string().c_str());
 
 5. Delete record.
 

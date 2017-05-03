@@ -68,7 +68,7 @@ if (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
 endif (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
 
 set(CASCADB_LIBS
-pthread m rt dl z
+pthread rt dl 
 )
 
 # Source files
@@ -79,6 +79,7 @@ install(DIRECTORY include/cascadb DESTINATION include)
 
 add_subdirectory(src)
 add_subdirectory(bench)
+add_subdirectory(sample)
 add_subdirectory(thirdparty)
 
 enable_testing()
