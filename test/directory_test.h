@@ -49,16 +49,16 @@ public:
 };
 
 
-class AIOFileTest : public testing::Test {
+class RandomAccessFileTest : public testing::Test {
 public:
-    virtual ~AIOFileTest() {
+    virtual ~RandomAccessFileTest() {
         delete dir;
     }
 
     virtual void SetUp()
     {
         dir->delete_file("aio_file_test");
-        file = dir->open_aio_file("aio_file_test");
+        file = dir->open_random_access_file("aio_file_test");
     }
 
     virtual void TearDown()
@@ -73,13 +73,13 @@ public:
 
         for(int i = 0; i < 1000; i ++) {
             memset((void*)buf.data(), i&0xFF, 4096);
-            AIOStatus status = file->write(i*4096, buf);
-            EXPECT_TRUE(status.succ);
+            int writelen = file->write(i*4096, buf);
+            EXPECT_TRUE(writelen == 4096);
         }
 
         for (int i = 0; i < 1000; i++ ) {
-            AIOStatus status = file->read(i*4096, buf);
-            EXPECT_TRUE(status.succ);
+            int readlen = file->read(i*4096, buf);
+            EXPECT_TRUE(readlen == 4096);
 
             char shouldbe[4096];
             memset(shouldbe, i&0xFF, 4096);
@@ -98,12 +98,13 @@ public:
             id[i] = i;
             buf[i] = allocbuf(4096);
             memset((void*)buf[i].data(), i&0xFF, 4096);
-            file->async_write(i * 4096, buf[i], id + i, io_complete);
+            int writelen = file->write(i * 4096, buf[i]);
+			result[i] = writelen;
         }
 
         while(result.size() != 1000) cascadb::usleep(10000); // 10ms
         for (int i = 0; i < 1000; i++ ) {
-            EXPECT_EQ(true, result[i].succ);
+            EXPECT_EQ(4096, result[i]);
             buf[i].destroy();
         }
         result.clear();
@@ -111,13 +112,13 @@ public:
         for (int i = 0; i < 1000; i++ ) {
             id[i] = i;
             buf[i] = allocbuf(4096);
-            file->async_read(i * 4096, buf[i], id + i, io_complete);
+            int readlen = file->read(i * 4096, buf[i]);
+			result[i] = readlen;
         }
 
         while(result.size() != 1000) cascadb::usleep(10000); // 10ms
         for (int i = 0; i < 1000; i++ ) {
-            EXPECT_EQ(true, result[i].succ);
-            EXPECT_EQ(4096U, result[i].read);
+            EXPECT_EQ(4096, result[i]);
             char shouldbe[4096];
             memset(shouldbe, i&0xFF, 4096);
             EXPECT_TRUE(memcmp(buf[i].data(), shouldbe, 4096) == 0);
@@ -130,19 +131,19 @@ public:
         int id = 0;
         Slice buf = allocbuf(4096);
         memset((void*)buf.data(), 0, 4096);
-        file->async_write(0, buf, &id, io_complete);
-
+        int writelen = file->write(0, buf);
+		result[0] = writelen;
         cascadb::usleep(100000); // wait 100 ms
-        EXPECT_EQ(true, result[0].succ);
+        EXPECT_EQ(4096, result[0]);
         buf.destroy();
         result.clear();
 
         buf = allocbuf(8192);
-        file->async_read(0, buf, &id, io_complete);
+        int readlen = file->read(0, buf);
+		result[0] = readlen;
 
         cascadb::usleep(100000); // wait 100 ms
-        EXPECT_EQ(true, result[0].succ);
-        EXPECT_EQ(4096U, result[0].read);
+        EXPECT_EQ(4096, result[0]);
         buf.destroy();
     }
 
@@ -152,16 +153,10 @@ public:
         return Slice((char*)ptr, size);
     }
 
-    static void io_complete(void* context, AIOStatus status)
-    {
-        ScopedMutex lock(&mtx);
-        result[*((int*)context)] = status;
-    }
-
     Directory                   *dir;
-    AIOFile*                    file;
+	RandomAccessFile*           file;
     static Mutex                mtx;
-    static map<int, AIOStatus>  result;
+    static map<int, int>  result;
 };
 
 

@@ -21,7 +21,7 @@ public:
     
     virtual SequenceFileWriter* open_sequence_file_writer(const std::string& filename) = 0;
 
-    virtual AIOFile* open_aio_file(const std::string& filename) = 0;
+    virtual RandomAccessFile* open_random_access_file(const std::string& filename) = 0;
 
     virtual size_t file_length(const std::string& filename) = 0;
 

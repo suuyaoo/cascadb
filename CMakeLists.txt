@@ -26,7 +26,7 @@ IF("${isSystemDir}" STREQUAL "-1")
    SET(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib")
 ENDIF("${isSystemDir}" STREQUAL "-1")
 
-add_definitions("-g -O2 -Wall")
+SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pipe -pthread -g -O2 -Wall")
 
 include_directories(
 ${PROJECT_SOURCE_DIR}/include
@@ -50,17 +50,6 @@ else (SNAPPY_FOUND)
     message(WARNING "Cannot find snappy, compression is disabled in cascadb")
 endif (SNAPPY_FOUND)
 
-# Check Libaio
-include(${CMAKE_SOURCE_DIR}/cmake/FindLibaio.cmake)
-if (LIBAIO_FOUND)
-    message(STATUS "Find libaio include:${LIBAIO_INCLUDE_DIR} libs:${LIBAIO_LIBRARIES}")
-    add_definitions("-DHAS_LIBAIO")
-    include_directories(${LIBAIO_INCLUDE_DIR})
-    link_libraries(${LIBAIO_LIBRARIES})
-else (LIBAIO_FOUND)
-    message(WARNING "Cannot find libaio, posix aio is used instead")
-endif (LIBAIO_FOUND)
-
 # environment
 
 if (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
@@ -68,7 +57,6 @@ if (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
 endif (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
 
 set(CASCADB_LIBS
-pthread rt dl 
 )
 
 # Source files

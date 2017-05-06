@@ -1,4 +1,4 @@
 #include "directory_test.h"
 
-Mutex               AIOFileTest::mtx;
-map<int, AIOStatus> AIOFileTest::result;
+Mutex               RandomAccessFileTest::mtx;
+map<int, int> RandomAccessFileTest::result;

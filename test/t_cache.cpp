@@ -67,7 +67,7 @@ TEST(Cache, read_and_write) {
     opts.cache_limit = 4096 * 1000;
 
     Directory *dir = new RAMDirectory();
-    AIOFile *file = dir->open_aio_file("cache_test");
+    RandomAccessFile *file = dir->open_random_access_file("cache_test");
     Layout *layout = new Layout(file, 0, opts);
     layout->init(true);
 

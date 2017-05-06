@@ -147,55 +147,15 @@ private:
     size_t offset_;
 };
 
-class PosixAIORequest {
+
+// A wrapper of POSIX IO APIs
+class PosixRandomAccessFile : public RandomAccessFile {
 public:
-    struct aiocb    aiocb;
-    bool            read;
-    size_t          size;
-    void            *context;
-    aio_callback_t  cb;
-};
-
-static void handle_posix_aio_complete(sigval_t sigval)
-{
-    AIOStatus status;
-    PosixAIORequest *req = (PosixAIORequest*) sigval.sival_ptr;
-
-    if (aio_error(&(req->aiocb)) == 0) {
-        ssize_t ret = aio_return(&(req->aiocb));
-        if (req->read) {
-            if (ret < 0) {
-                LOG_ERROR("posix aio read error: ");
-                status.succ = false;
-            } else {
-                status.succ = true;
-                status.read = ret;
-            }
-        } else {
-            if (ret < 0 || (size_t)ret < req->size) {
-                LOG_ERROR("posix aio write error: ");
-                status.succ = false;
-            } else {
-                status.succ = true;
-            }
-        }
-    } else {
-        LOG_ERROR("posix aio handle io error");
-        status.succ = false;
-    }
-
-    req->cb(req->context, status);
-    delete req;
-}
-
-// A wrapper of POSIX AIO APIs
-class PosixAIOFile : public AIOFile {
-public:
-    PosixAIOFile(const std::string& path) : path_(path), closed_(false), fd_(-1)
+	PosixRandomAccessFile(const std::string& path) : path_(path), closed_(false), fd_(-1)
     {
     }
 
-    ~PosixAIOFile()
+    ~PosixRandomAccessFile()
     {
         close();
     }
@@ -212,56 +172,38 @@ public:
         return true;
     }
 
-    void async_read(uint64_t offset, Slice buf, void* context, aio_callback_t cb)
+    int read(uint64_t offset, Slice buf)
     {
-        PosixAIORequest *req = new PosixAIORequest();
-        prepare_aiocb(req, offset, buf);
-        req->read = true;
-        req->size = buf.size();
-        req->context = context;
-        req->cb = cb;
+		unsigned char* bytes = (unsigned char*)buf.data();
+		unsigned int len = buf.size();
+		int bytes_read = 0;
+		int rv;
+		do {
+			rv = ::pread(fd_, bytes + bytes_read, len - bytes_read, offset + bytes_read);
+			if (rv <= 0) {
+				break;
+			}
+			bytes_read += rv;
+		} while (bytes_read < len);
 
-        while (true) {
-            int ret = aio_read(&(req->aiocb));
-            if (ret < 0) {
-                if (errno == EAGAIN) {
-                    LOG_INFO("posix aio_read busy, wait for a while");
-                    cascadb::usleep(1000);
-                    continue; // retry
-                }
-                LOG_ERROR("posix aio_read error: " << strerror(errno));
-                AIOStatus status;
-                status.succ = false;
-                cb(context, status); // failed
-            }
-            return; // ok
-        }
+		return bytes_read ? bytes_read : rv;
     }
 
-    void async_write(uint64_t offset, Slice buf, void* context, aio_callback_t cb)
+    int write(uint64_t offset, Slice buf)
     {
-        PosixAIORequest *req = new PosixAIORequest();
-        prepare_aiocb(req, offset, buf);
-        req->read = false;
-        req->size = buf.size();
-        req->context = context;
-        req->cb = cb;
-
-        while (true) {
-            int ret = aio_write(&(req->aiocb));
-            if (ret < 0) {
-                if (errno == EAGAIN) {
-                    LOG_INFO("posix aio_write busy, wait for a while");
-                    cascadb::usleep(1000);
-                    continue; // retry
-                }
-                LOG_ERROR("posix aio_write error: " << strerror(errno));
-                AIOStatus status;
-                status.succ = false;
-                cb(context, status); // failed
-            }
-            return; // ok
-        }
+		unsigned char* bytes = (unsigned char*)buf.data();
+		unsigned int len = buf.size();
+		unsigned int bytes_written = 0;
+		int rv;
+		do {
+			rv = ::pwrite(fd_, bytes + bytes_written, len - bytes_written, offset + bytes_written);
+			if (rv <= 0) {
+				LOG_ERROR("write file error " << strerror(errno));
+				return rv;
+			}
+			bytes_written += rv;
+		} while (bytes_written < len);
+		return bytes_written;
     }
 
     void truncate(uint64_t offset)
@@ -280,21 +222,6 @@ public:
             ::close(fd_);
             fd_ = -1;
         }
-    }
-
-protected:
-    void prepare_aiocb(PosixAIORequest *req, uint64_t offset, Slice buf)
-    {
-        bzero(&(req->aiocb), sizeof(struct aiocb));
-        req->aiocb.aio_fildes = fd_;
-        req->aiocb.aio_buf = (char*) buf.data();
-        req->aiocb.aio_nbytes = buf.size();
-        req->aiocb.aio_offset = offset;
-
-        req->aiocb.aio_sigevent.sigev_notify = SIGEV_THREAD;
-        req->aiocb.aio_sigevent.sigev_notify_function = handle_posix_aio_complete;
-        req->aiocb.aio_sigevent.sigev_notify_attributes = NULL;
-        req->aiocb.aio_sigevent.sigev_value.sival_ptr = req;
     }
 
 private:
@@ -341,9 +268,9 @@ SequenceFileWriter* PosixFSDirectory::open_sequence_file_writer(const std::strin
     return NULL;
 }
 
-AIOFile* PosixFSDirectory::open_aio_file(const std::string& filename)
+RandomAccessFile* PosixFSDirectory::open_random_access_file(const std::string& filename)
 {
-    PosixAIOFile* file = new PosixAIOFile(fullpath(filename));
+	PosixRandomAccessFile* file = new PosixRandomAccessFile(fullpath(filename));
     if (file && file->open()) {
         return file;
     }

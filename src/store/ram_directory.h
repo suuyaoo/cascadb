@@ -39,7 +39,7 @@ public:
     }
 
     // Read data maybe not consistent if another thread is writing the same area concurrently
-    bool read(uint64_t offset, Slice data, size_t& res);
+    bool read(uint64_t offset, Slice data, int& res);
 
     bool write(uint64_t offset, Slice data);
 
@@ -81,7 +81,7 @@ public:
 
     SequenceFileWriter* open_sequence_file_writer(const std::string& filename);
 
-    AIOFile* open_aio_file(const std::string& filename);
+	RandomAccessFile* open_random_access_file(const std::string& filename);
 
     size_t file_length(const std::string& filename);
 

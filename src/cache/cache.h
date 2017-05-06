@@ -81,14 +81,6 @@ protected:
 
     void flush_nodes(std::vector<Node*>& nodes);
 
-    struct WriteCompleteContext {
-        Node            *node;
-        Layout          *layout;
-        Block           *block;
-    };
-
-    void write_complete(WriteCompleteContext* context, bool succ);
-
     void delete_nodes(std::vector<Node*>& nodes);
     
 private:

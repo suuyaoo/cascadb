@@ -15,18 +15,10 @@
 using namespace std;
 using namespace cascadb;
 
-static void aio_complete_handler(void *context, AIOStatus status)
-{
-    Callback *cb = (Callback *)context;
-    assert(cb);
-    cb->exec(status);
-    delete cb;
-}
-
-Layout::Layout(AIOFile* aio_file, 
+Layout::Layout(RandomAccessFile* file, 
                size_t length,
                const Options& options)
-: aio_file_(aio_file),
+: file_(file),
   length_(length),
   options_(options),
   offset_(0),
@@ -175,113 +167,35 @@ Block* Layout::read(bid_t bid, uint32_t offset, uint32_t size)
     return block;
 }
 
-void Layout::async_read(bid_t bid, Block **block, Callback *cb)
+bool Layout::write(bid_t bid, Block *block, uint32_t skeleton_size)
 {
-    BlockMeta meta;
-    if (!get_block_meta(bid, meta)) {
-        LOG_INFO("Read Block failed, cannot find block bid " << hex << bid << dec);
-        cb->exec(false);
-        return;
-    }
+	// assumpt buffer inside block is aligned
+	assert(block->capacity() == PAGE_ROUND_UP(block->size()));
 
-    Slice buffer = alloc_aligned_buffer(meta.total_size);
-    if (!buffer.size()) {
-        LOG_ERROR("alloc_aligned_buffer fail, size " << meta.total_size);
-        cb->exec(false);
-        return;
-    }
+	Slice buffer = block->buffer();
+	BlockMeta meta;
+	meta.skeleton_size = skeleton_size;
+	meta.total_size = block->size();
+	meta.offset = get_offset(buffer.size());
+	meta.crc = crc16(buffer.data(), buffer.size());
+	meta.skeleton_crc = crc16(block->start(), skeleton_size);
+	
 
-    AsyncReadReq *req = new AsyncReadReq();
-    req->bid = bid;
-    req->cb = cb;
-    req->block = block;
-    req->buffer = buffer;
-    req->meta = meta;
+	int writelen = file_->write(meta.offset, buffer);
 
-    Callback *ncb = new Callback(this, &Layout::handle_async_read, req);
+	bool succ = writelen == buffer.size();
 
-    ScopedMutex lock(&mtx_);
-    fly_reads_ ++;
-    lock.unlock();
+	if (succ == true) {
+		LOG_TRACE("write block bid " << hex << bid << dec
+			<< " at offset " << meta.offset << " ok");
+		set_block_meta(bid, meta);
+	}
+	else {
+		LOG_ERROR("write block " << bid << " error");
+		add_hole(meta.offset, PAGE_ROUND_UP(meta.total_size));
+	}
 
-    aio_file_->async_read(meta.offset, buffer, ncb, aio_complete_handler);
-}
-
-void Layout::handle_async_read(AsyncReadReq *req, AIOStatus status)
-{
-    ScopedMutex lock(&mtx_);
-    fly_reads_ --;
-    lock.unlock();
-
-    if (status.succ) {
-        LOG_TRACE("read block bid " << hex << req->bid << dec 
-                  << " at offset " << req->meta.offset << " ok");
-
-        uint16_t crc;
-
-        *(req->block) = new Block(req->buffer, 0, req->meta.total_size);
-        crc = crc16(req->buffer.data(), req->buffer.size());
-
-        if (crc == req->meta.crc) {
-            req->cb->exec(true);
-        } else {
-            LOG_ERROR("read block crc" << hex << req->bid << dec << req->meta.crc << " error");
-            free_buffer(req->buffer);
-            req->cb->exec(false);
-        }
-    } else {
-        LOG_ERROR("read block bid " << hex << req->bid << dec << req->meta.crc << " error");
-        free_buffer(req->buffer);
-        req->cb->exec(false);
-    }
-
-    delete req->cb;
-    delete req;
-}
-
-void Layout::async_write(bid_t bid, Block *block, uint32_t skeleton_size, Callback *cb)
-{
-    // assumpt buffer inside block is aligned
-    assert(block->capacity() == PAGE_ROUND_UP(block->size()));
-
-    AsyncWriteReq *req = new AsyncWriteReq();
-    req->bid = bid;
-    req->cb = cb;
-    req->meta.skeleton_size = skeleton_size;
-    req->meta.total_size = block->size();
-    req->buffer = block->buffer();
-    req->meta.offset = get_offset(req->buffer.size());
-    req->meta.crc = crc16(req->buffer.data(), req->buffer.size());
-    req->meta.skeleton_crc = crc16(block->start(), skeleton_size);
-
-    Callback *ncb = new Callback(this, &Layout::handle_async_write, req);
-
-    ScopedMutex lock(&mtx_);
-    fly_writes_ ++;
-    lock.unlock();
-
-    aio_file_->async_write(req->meta.offset, req->buffer, ncb, aio_complete_handler);
-}
-
-void Layout::handle_async_write(AsyncWriteReq *req, AIOStatus status)
-{
-    ScopedMutex lock(&mtx_);
-    fly_writes_ --;
-    lock.unlock();
-
-    if (status.succ) {
-        LOG_TRACE("write block bid " << hex << req->bid << dec
-            << " at offset " << req->meta.offset << " ok");
-        set_block_meta(req->bid, req->meta);
-    } else {
-        LOG_ERROR("write block " << req->bid << " error");
-        add_hole(req->meta.offset, PAGE_ROUND_UP(req->meta.total_size));
-    }
-
-    req->cb->exec(status.succ);
-    delete req->cb;
-
-    delete req;
+	return succ;
 }
 
 void Layout::delete_block(bid_t bid)
@@ -333,7 +247,7 @@ void Layout::truncate()
 {
     ScopedMutex lock(&mtx_);
     if (offset_ < length_) {
-        aio_file_->truncate(offset_);
+        file_->truncate(offset_);
         length_ = offset_;
     }
 }
@@ -697,13 +611,13 @@ bool Layout::read_data(uint64_t offset, Slice& buffer)
     fly_reads_ ++;
     lock.unlock();
 
-    AIOStatus status = aio_file_->read(offset, buffer);
+    int readlen = file_->read(offset, buffer);
 
     lock.lock();
     fly_reads_ --;
     lock.unlock();
 
-    if (!status.succ) {
+    if (readlen <= 0) {
         LOG_ERROR("read file offset " << offset << ", size " << buffer.size() << " error");
         return false;
     }
@@ -718,13 +632,13 @@ bool Layout::write_data(uint64_t offset, Slice buffer)
     fly_writes_ ++;
     lock.unlock();
 
-    AIOStatus status = aio_file_->write(offset, buffer);
+    int writelen = file_->write(offset, buffer);
 
     lock.lock();
     fly_writes_ --;
     lock.unlock();
     
-    if (!status.succ) {
+    if (writelen != buffer.size()) {
         LOG_ERROR("write file offset " << offset << ", size " << buffer.size() << " error");
         return false;
     }

@@ -21,9 +21,7 @@ public:
 
     virtual SequenceFileWriter* open_sequence_file_writer(const std::string& filename);
 
-    // I'm implementing posix AIO here, however, it canbe overriden to support 
-    // kernel-level AIO in Linux, Solaris etc.
-    virtual AIOFile* open_aio_file(const std::string& filename);
+    virtual RandomAccessFile* open_random_access_file(const std::string& filename);
 
     virtual size_t file_length(const std::string& filename);
 

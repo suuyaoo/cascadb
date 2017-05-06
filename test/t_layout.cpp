@@ -28,7 +28,7 @@ public:
     virtual void SetUp()
     {
         dir->delete_file("layout_test");
-        file = dir->open_aio_file("layout_test");
+        file = dir->open_random_access_file("layout_test");
     }
 
     virtual void TearDown()
@@ -66,8 +66,8 @@ public:
             for (size_t j = 0; j < size; j++ ) {
                 writer.writeUInt8(i&0xff);
             }
-            Callback *cb = new Callback(this, &LayoutTest::callback, (bid_t)i);
-            layout->async_write(i, write_bufs[i], size, cb);
+            bool rv = layout->write(i, write_bufs[i], size);
+			results[i] = rv;
         }
 
         while(results.size() != 1000) cascadb::usleep(10000); // 10ms
@@ -83,25 +83,6 @@ public:
         }
         write_bufs.clear();
     }
-
-    void AsyncRead() {
-        results.clear();
-        Block *read_bufs[1000];
-        for (int i = 0; i < 1000; i++ ) {
-            Callback *cb = new Callback(this, &LayoutTest::callback, (bid_t)i);
-            layout->async_read(i, &(read_bufs[i]), cb);
-        }
-
-        while(results.size() != 1000) cascadb::usleep(10000); // 10ms
-        for (int i = 0; i < 1000; i++ ) {
-            ASSERT_TRUE(results[i]);
-            if (results[i]) {
-                ASSERT_EQ(write_bufs[i]->size(), read_bufs[i]->size());
-                ASSERT_EQ(0, memcmp(write_bufs[i]->start(), read_bufs[i]->start(), write_bufs[i]->size()));
-            }
-            layout->destroy(read_bufs[i]);
-        }
-    } 
 
     void BlockingRead() {
         for (int i = 0; i < 1000; i++ ) {
@@ -120,7 +101,7 @@ public:
     }
 
     Directory                   *dir;
-    AIOFile                     *file;
+    RandomAccessFile            *file;
     Layout                      *layout;
 
     size_t                      min_page_size;
@@ -132,21 +113,6 @@ public:
 };
 
 
-TEST_F(LayoutTest, async_read)
-{
-    Options opts;
-
-    OpenLayout(opts, true);
-    Write();
-    CloseLayout();
-
-    OpenLayout(opts, false);
-    AsyncRead();
-    CloseLayout();
-
-    ClearWriteBufs();
-}
-
 TEST_F(LayoutTest, blocking_read)
 {
     Options opts;
@@ -157,22 +123,6 @@ TEST_F(LayoutTest, blocking_read)
     
     OpenLayout(opts, false);
     BlockingRead();
-    CloseLayout();
-
-    ClearWriteBufs();
-}
-
-TEST_F(LayoutTest, async_read_compress)
-{
-    Options opts;
-    opts.compress = kSnappyCompress;
-
-    OpenLayout(opts, true);
-    Write();
-    CloseLayout();
-
-    OpenLayout(opts, false);
-    AsyncRead();
     CloseLayout();
 
     ClearWriteBufs();
@@ -203,7 +153,7 @@ TEST_F(LayoutTest, update)
     CloseLayout();
 
     OpenLayout(opts, false);
-    AsyncRead();
+	BlockingRead();
     CloseLayout();
 
     ClearWriteBufs();
@@ -213,7 +163,7 @@ TEST_F(LayoutTest, update)
     CloseLayout();
 
     OpenLayout(opts, false);
-    AsyncRead();
+	BlockingRead();
     CloseLayout();
 
     ClearWriteBufs();

@@ -602,12 +602,18 @@ void Cache::flush_nodes(vector<Node*>& nodes)
         // unlock node
         node->unlock();
         
-        WriteCompleteContext *context = new WriteCompleteContext();
-        context->node = node;
-        context->layout = layout;
-        context->block = block;
-        Callback *cb = new Callback(this, &Cache::write_complete, context);
-        layout->async_write(nid, block, skeleton_size, cb);
+		bool succ = layout->write(nid, block, skeleton_size);
+		
+		if (succ) {
+			LOG_TRACE("write node table " << node->table_name() << ", nid " << node->nid() << " ok");
+		}
+		else {
+			LOG_ERROR("write node table " << node->table_name() << ", nid " << node->nid() << " error");
+			// TODO: handle the error
+		}
+
+		node->set_flushing(false);
+		layout->destroy(block);
 
         tables.insert(node->table_name());
     }
@@ -627,27 +633,6 @@ void Cache::flush_nodes(vector<Node*>& nodes)
             update_last_checkpoint_time(*it, current);
         }
     }
-}
-
-void Cache::write_complete(WriteCompleteContext* context, bool succ)
-{
-    Node *node = context->node;
-    assert(node);
-    Layout *layout = context->layout;
-    assert(layout);
-    Block *block = context->block;
-    assert(block);
-
-    if (succ) {
-        LOG_TRACE("write node table " << node->table_name() << ", nid " << node->nid() << " ok" );
-    } else {
-        LOG_ERROR("write node table " << node->table_name() << ", nid " << node->nid() << " error");
-        // TODO: handle the error
-    }
-
-    node->set_flushing(false);
-    layout->destroy(block);
-    delete context;
 }
 
 void Cache::delete_nodes(vector<Node*>& nodes)

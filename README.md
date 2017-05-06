@@ -9,18 +9,8 @@ Yet another write-optimized storage engine, using buffered B-tree algorithm insp
 * Support Direct IO and Linux AIO.
 
 ## Dependencies
-CascaDB can have better performance if libaio and google snappy library 're installed. Otherwise
-Posix AIO (simulate AIO with multiple threads which is not true asynchronous) is used instead
-and data blocks're not compressed.
-
-* libaio
-
-    On Ubuntu Linux
-
-        sudo apt-get install libaio-dev
-    On RHEL
-
-        sudo yum install libaio-devel
+CascaDB can have better performance if google snappy library 're installed. Otherwise
+data blocks're not compressed.
 
 * [snappy](http://code.google.com/p/snappy/)
 
@@ -59,10 +49,13 @@ Read benchmark results after random insertions
 
 1. Include the header file.
 
+```c++
         #include <cascadb/db.h>
+```
 
 2. Open the database.
 
+```c++
         Options opts;
         opts.dir = create_fs_directory("/tmp/db_bench");
         opts.comparator = new LexicalComparator();
@@ -74,32 +67,41 @@ Read benchmark results after random insertions
           fprintf(stderr, "open error %s\n", dbname);
           exit(1);
         }
+```
 
 3. Insert record.
 
+```c++
         if (!db->put("This is the key", "This is the value")) {
             fprintf(stderr, "put error\n");
         }
+```
 
 4. Read record.
 
+```c++
         Slice value;
         if (!db->get("This is the key", value)) {
             fprintf(stderr, "get error\n");
         }
         fprintf(stdout, "the value is %s\n", value.to_string().c_str());
+```
 
 5. Delete record.
 
+```c++
         if (!db->del("This is the key")) {
             fprintf(stderr, "del error\n");
         }
+```
 
 6. Destory database.
 
+```c++
         delete db;
         delete opts.comparator;
         delete opts.dir;
+```
 
 ## TODO
 * Add forward and backward iteration over data.

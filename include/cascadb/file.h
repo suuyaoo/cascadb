@@ -46,43 +46,24 @@ private:
     void operator=(const SequenceFileWriter&);   
 };
 
-struct AIOStatus {
-    AIOStatus(): succ(false), read(0) {}
-
-    bool    succ;       // whether AIO read/write completes successfully
-    size_t  read;       // number of bytes read in AIO read
-};
-
-typedef void (*aio_callback_t)(void* context, AIOStatus status);
-
-class AIOFile {
+class RandomAccessFile {
 public:
-    AIOFile() {}
-    virtual ~AIOFile() {}
+	RandomAccessFile() {}
+    virtual ~RandomAccessFile() {}
 
     // blocking wrapper to async read
-    virtual AIOStatus read(uint64_t offset, Slice buf);
+    virtual int read(uint64_t offset, Slice buf) = 0;
 
     // blocking wrapper to async write
-    virtual AIOStatus write(uint64_t offset, Slice buf);
+    virtual int write(uint64_t offset, Slice buf) = 0;
 
-    // prepare to read a number of bytes at specified offset into buffer,
-    // Callback will be invoked after the write operation completes,
-    // The context parameter will be passed back into callback
-    virtual void async_read(uint64_t offset, Slice buf, void* context, aio_callback_t cb) = 0;
-
-    // prepare to write bytes in buffer to file at specified offset,
-    // Callback will be invoked after the write operation completes,
-    // The context parameter will be passed back into callback
-    virtual void async_write(uint64_t offset, Slice buf, void* context, aio_callback_t cb) = 0;
-
-    virtual void truncate(uint64_t offset) {}
+	virtual void truncate(uint64_t offset) { }
 
     virtual void close() = 0;
 
 private:
-    AIOFile(const AIOFile&);
-    void operator=(const AIOFile&);
+	RandomAccessFile(const RandomAccessFile&);
+    void operator=(const RandomAccessFile&);
 };
 
 }

@@ -4,7 +4,7 @@
 
 #include "util/logger.h"
 #include "store/ram_directory.h"
-#include "sys/linux/linux_fs_directory.h"
+#include "sys/posix/posix_fs_directory.h"
 #include "db_impl.h"
 
 using namespace std;
@@ -39,7 +39,7 @@ bool DBImpl::init()
     }
     LOG_INFO("init db , data file length " << length << ", create " << create);
 
-    file_ = dir->open_aio_file(filename);
+    file_ = dir->open_random_access_file(filename);
     layout_ = new Layout(file_, length, options_);
     if (!layout_->init(create)) {
         LOG_ERROR("init layout error");

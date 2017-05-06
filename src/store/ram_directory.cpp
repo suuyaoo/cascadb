@@ -12,7 +12,7 @@ using namespace std;
 using namespace cascadb;
 
 // Read data maybe not consistent if another thread is writing the same area concurrently
-bool RAMFile::read(uint64_t offset, Slice data, size_t& res) {
+bool RAMFile::read(uint64_t offset, Slice data, int& res) {
     ScopedMutex lock(&mtx_);
     assert(refcnt_ > 0);
     uint64_t length = length_; 
@@ -131,7 +131,7 @@ public:
     size_t read(Slice buf)
     {
         assert(file_);
-        size_t res;
+        int res;
         file_->read(offset_, buf, res);
         offset_ += res;
         return res;
@@ -199,48 +199,36 @@ private:
     size_t offset_;
 };
 
-class RAMAIOFile : public AIOFile {
+class RAMRandomAccessFile : public RandomAccessFile {
 public:
-    RAMAIOFile(RAMFile* file) : file_(file)
+	RAMRandomAccessFile(RAMFile* file) : file_(file)
     {
         file_->inc_refcnt();
     }
 
-    ~RAMAIOFile()
+    ~RAMRandomAccessFile()
     {
         close();
     }
 
-    AIOStatus read(uint64_t offset, Slice buf)
+    int read(uint64_t offset, Slice buf)
     {
         assert(file_);
-        AIOStatus status;
-        status.succ = file_->read(offset, buf, status.read);
-        return status;
+        int readlen;
+        bool status = file_->read(offset, buf, readlen);
+		assert(status == true);
+        return readlen;
     }
 
-    AIOStatus write(uint64_t offset, Slice buf)
+    int write(uint64_t offset, Slice buf)
     {
         assert(file_);
-        AIOStatus status;
-        status.succ = file_->write(offset, buf);
-        return status;
-    }
-
-    void async_read(uint64_t offset, Slice buf, void* context, aio_callback_t cb)
-    {
-        assert(file_);
-        AIOStatus status;
-        status.succ = file_->read(offset, buf, status.read);
-        cb(context, status);
-    }
-
-    void async_write(uint64_t offset, Slice buf, void* context, aio_callback_t cb)
-    {
-        assert(file_);
-        AIOStatus status;
-        status.succ = file_->write(offset, buf);
-        cb(context, status);
+		int writelen = -1;
+        bool status = file_->write(offset, buf);
+		if (status == true) {
+			writelen = buf.size();
+		}
+        return writelen;
     }
 
     void truncate(uint64_t offset)
@@ -316,12 +304,12 @@ SequenceFileWriter* RAMDirectory::open_sequence_file_writer(const std::string& f
     return new RAMSequenceFileWriter(file);
 }
 
-AIOFile* RAMDirectory::open_aio_file(const std::string& filename)
+RandomAccessFile* RAMDirectory::open_random_access_file(const std::string& filename)
 {
     ScopedMutex lock(&mtx_);
     RAMFile *file = open_ramfile(filename, true);
     assert(file);
-    return new RAMAIOFile(file);
+    return new RAMRandomAccessFile(file);
 }
 
 size_t RAMDirectory::file_length(const std::string& filename)

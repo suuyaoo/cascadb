@@ -14,25 +14,25 @@ TEST_F(RAMSequenceFileTest, read_and_write) {
     TestReadAndWrite();
 }
 
-class RAMAIOFileTest : public AIOFileTest {
+class RAMRandomAccessFileTest : public RandomAccessFileTest {
 public:
-    RAMAIOFileTest() 
+	RAMRandomAccessFileTest()
     {
         dir = new RAMDirectory();
     }
 };
 
-TEST_F(RAMAIOFileTest, blocking_read_and_write)
+TEST_F(RAMRandomAccessFileTest, blocking_read_and_write)
 {
     TestBlockingReadAndWrite();
 }
 
-TEST_F(RAMAIOFileTest, read_and_write)
+TEST_F(RAMRandomAccessFileTest, read_and_write)
 {
     TestReadAndWrite();
 }
 
-TEST_F(RAMAIOFileTest, read_partial)
+TEST_F(RAMRandomAccessFileTest, read_partial)
 {
     TestReadPartial();
 }

@@ -38,7 +38,7 @@ TEST(Tree, bootstrap)
     opts.leaf_node_record_count = 4;
 
     Directory *dir = new RAMDirectory();
-    AIOFile *file = dir->open_aio_file("tree_test");
+    RandomAccessFile *file = dir->open_random_access_file("tree_test");
     Layout *layout = new Layout(file, 0, opts);
     ASSERT_TRUE(layout->init(true));
     Cache *cache = new Cache(opts);
@@ -213,7 +213,7 @@ TEST(InnerNode, serialize)
     opts.leaf_node_record_count = 4;
 
     Directory *dir = new RAMDirectory();
-    AIOFile *file = dir->open_aio_file("tree_test");
+    RandomAccessFile *file = dir->open_random_access_file("tree_test");
     Layout *layout = new Layout(file, 0, opts);
     ASSERT_TRUE(layout->init(true));
     Cache *cache = new Cache(opts);
@@ -422,7 +422,7 @@ TEST(InnerNode, add_pivot)
     opts.inner_node_children_number = 4;
 
     Directory *dir = new RAMDirectory();
-    AIOFile *file = dir->open_aio_file("tree_test");
+    RandomAccessFile *file = dir->open_random_access_file("tree_test");
     Layout *layout = new Layout(file, 0, opts);
     ASSERT_TRUE(layout->init(true));
     Cache *cache = new Cache(opts);
@@ -481,7 +481,7 @@ TEST(InnerNode, split)
     opts.inner_node_children_number = 3;
 
     Directory *dir = new RAMDirectory();
-    AIOFile *file = dir->open_aio_file("tree_test");
+    RandomAccessFile *file = dir->open_random_access_file("tree_test");
     Layout *layout = new Layout(file, 0, opts);
     ASSERT_TRUE(layout->init(true));
     Cache *cache = new Cache(opts);

@@ -41,7 +41,7 @@ private:
     std::string name_;
     Options options_;
     
-    AIOFile *file_;
+    RandomAccessFile *file_;
     Layout *layout_;
     Cache *cache_;
     Tree* tree_;

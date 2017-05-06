@@ -41,7 +41,7 @@ struct BlockMeta {
 
 class Layout {
 public:
-    Layout(AIOFile* aio_file,
+    Layout(RandomAccessFile* file,
            size_t length,
            const Options& options);
 
@@ -60,13 +60,10 @@ public:
     // Read from a relative offset from the beginning of block
     // and get n bytes, the area should not out of bounds
     Block* read(bid_t bid, uint32_t offset, uint32_t size);
+  
+	// Blocking write
+	bool write(bid_t bid, Block *block, uint32_t skeleton_size);
 
-    // Initialize a read operation
-    void async_read(bid_t bid, Block** block, Callback *cb);
-
-    // Initiate a write operation
-    void async_write(bid_t bid, Block* block, uint32_t skeleton_size, Callback *cb);
-    
     // Delete block from index 
     void delete_block(bid_t bid);
 
@@ -127,29 +124,6 @@ protected:
     // Serialize block metadata into buffer
     bool write_block_meta(BlockMeta* meta, BlockWriter& writer);
 
-    // Context of async read operation
-    struct AsyncReadReq {
-        bid_t                   bid;
-        Callback                *cb;
-        Block                   **block;
-        BlockMeta               meta;
-        Slice                  buffer;
-    };
-
-    // called when AIOFile returns the result of async read
-    void handle_async_read(AsyncReadReq *r, AIOStatus status);
-
-    // Context of async write operation
-    struct AsyncWriteReq {
-        bid_t                   bid;
-        Callback                *cb;
-        BlockMeta               meta;
-        Slice                  buffer;
-    };
-
-    // called when AIOFile returns the result of asyn write
-    void handle_async_write(AsyncWriteReq *req, AIOStatus status);
-
     bool get_block_meta(bid_t bid, BlockMeta& meta);
 
     void set_block_meta(bid_t bid, const BlockMeta& meta);
@@ -186,7 +160,7 @@ protected:
     void free_buffer(Slice buffer);
 
 private:
-    AIOFile                             *aio_file_;
+    RandomAccessFile*					file_;
     uint64_t                            length_; // file length
     Options                             options_;
 
